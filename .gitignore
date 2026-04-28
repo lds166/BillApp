@@ -1,0 +1,47 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+#  Uncomment the following line in case you need and you don't have the release build type files in your app
+# release/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# IntelliJ
+*.iml
+.idea/
+#  keep gradle wrapper jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Android Studio profiler
+*.hprof
+
+# Keystore files
+*.jks
+*.keystore
+
+# Version control specific
+*.log
+
+# Android Studio captures folder
+captures/
