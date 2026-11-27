@@ -149,6 +149,14 @@
   }
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   function rnd(a, b) { return a + Math.random() * (b - a); }
+  function wireNum(id, apply) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", (e) => {
+      const v = Math.max(1, parseFloat(e.target.value) || 1);
+      apply(v);
+    });
+  }
   function norm(s) { return String(s || "").replace(/\s+/g, " ").trim(); }
 
   const sentTimes = [];
@@ -194,8 +202,10 @@
       '    </select></label>',
       '  <label class="bzai-row"><span>每小时上限</span><input type="number" id="bzai-cap" min="1" max="200"></label>',
       '  <div class="bzai-sep">批量发送</div>',
-      '  <textarea id="bzai-batch-text" placeholder="要群发的话术…"></textarea>',
-      '  <label class="bzai-row"><span>最多发</span><input type="number" id="bzai-batch-max" min="1" max="200"> <span>人</span></label>',
+      '  <div class="bzai-lbl">群发内容（同一段话，逐人发送）</div>',
+      '  <textarea id="bzai-batch-text" placeholder="在这里输入要群发的话术…"></textarea>',
+      '  <label class="bzai-row"><span>最多发</span><span><input type="number" id="bzai-batch-max" min="1" max="200"> 人</span></label>',
+      '  <div class="bzai-row"><span>每条间隔(秒)</span><span><input type="number" id="bzai-batch-dmin" min="1" max="300"> – <input type="number" id="bzai-batch-dmax" min="1" max="300"></span></div>',
       '  <div class="bzai-btns">',
       '    <button id="bzai-batch-start" type="button">开始批量</button>',
       '    <button id="bzai-batch-stop" type="button">停止</button>',
@@ -231,6 +241,7 @@
       "border:1px solid #3a3f4e;border-radius:8px;padding:5px 8px;font:inherit;outline:none;}",
       "#bzai-panel textarea{width:100%;min-height:60px;resize:vertical;box-sizing:border-box;}",
       "#bzai-panel .bzai-sep{margin:12px 0 8px;font-size:12px;color:#8b90a0;border-top:1px solid #333744;padding-top:8px;}",
+      "#bzai-panel .bzai-lbl{font-size:12px;color:#8b90a0;margin:6px 0 4px;}",
       "#bzai-panel .bzai-btns{display:flex;gap:8px;flex-wrap:wrap;}",
       "#bzai-panel .bzai-btns button{flex:1;min-width:80px;background:#2c3040;color:#e8e8ec;border:1px solid #3a3f4e;",
       "border-radius:8px;padding:7px 6px;cursor:pointer;font:inherit;}",
@@ -251,6 +262,8 @@
     wrap.querySelector("#bzai-cap").value = cfg.hourlyCap;
     wrap.querySelector("#bzai-batch-text").value = cfg.batchText || "";
     wrap.querySelector("#bzai-batch-max").value = cfg.batchMax;
+    wrap.querySelector("#bzai-batch-dmin").value = cfg.batchDelayMin;
+    wrap.querySelector("#bzai-batch-dmax").value = cfg.batchDelayMax;
 
     wrap.querySelector(".bzai-min").addEventListener("click", () => wrap.classList.toggle("bzai-collapsed"));
 
@@ -273,6 +286,8 @@
     wrap.querySelector("#bzai-batch-max").addEventListener("change", (e) => {
       cfg.batchMax = Math.max(1, parseInt(e.target.value, 10) || 10); saveCfg();
     });
+    wireNum("bzai-batch-dmin", (v) => { cfg.batchDelayMin = v; saveCfg(); });
+    wireNum("bzai-batch-dmax", (v) => { cfg.batchDelayMax = v; saveCfg(); });
     wrap.querySelector("#bzai-batch-start").addEventListener("click", startBatch);
     wrap.querySelector("#bzai-batch-stop").addEventListener("click", () => { stopFlag = true; log("已请求停止", "warn"); });
     wrap.querySelector("#bzai-scan").addEventListener("click", scan);
