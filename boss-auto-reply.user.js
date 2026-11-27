@@ -68,6 +68,7 @@
     sendBtn: [
       ".submit-content .submit",
       ".submit",
+      ".submit-content",
       ".boss-chat-editor-send"
     ]
   };
@@ -326,11 +327,27 @@
         el.dispatchEvent(new Event("input", { bubbles: true }));
         el.dispatchEvent(new Event("change", { bubbles: true }));
       } else {
-        // contenteditable：先清空再插入，尽量触发框架的 input 事件
-        el.innerText = "";
-        document.execCommand("insertText", false, text);
-        if (!el.innerText.trim()) el.innerText = text;
-        el.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
+        // contenteditable：选中全部后用 insertText 覆盖，最接近“真人打字”，能触发 React 编辑器
+        el.focus();
+        try {
+          const sel = window.getSelection();
+          if (sel) {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        } catch (e) {}
+        let ok = false;
+        try { ok = document.execCommand("insertText", false, text); } catch (e) { ok = false; }
+        if (!ok || !(el.innerText || "").trim()) {
+          el.textContent = text;
+          try {
+            el.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
+          } catch (e) {
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }
       }
       return true;
     } catch (e) {
