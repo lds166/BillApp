@@ -386,13 +386,21 @@
     return false;
   }
 
+  function currentConvTitle() {
+    const el = pick([".base-info-single-container", ".conversation-box", ".chat-conversation"]);
+    return el ? norm(el.textContent).slice(0, 24) : "";
+  }
+
   async function openChatItem(item) {
+    const before = currentConvTitle();
     item.click();
-    // 等待聊天区就绪（输入框出现），最多等 4 秒
+    // 等待右侧会话切换到目标（标题变化），最多等 5 秒
     const start = Date.now();
-    while (Date.now() - start < 4000) {
+    while (Date.now() - start < 5000) {
       await sleep(200);
-      if (pick(SELECTORS.inputBox)) break;
+      const now = currentConvTitle();
+      if (now && now !== before) break;
+      if (!before && pick(SELECTORS.inputBox)) break;
     }
     await sleep(rnd(300, 700));
   }
@@ -525,21 +533,35 @@
     if (!confirm("即将向最多 " + cfg.batchMax + " 个会话发送相同内容，确认开始？")) return;
 
     running = true;
-    const items = getChatItems();
-    if (!items.length) {
+    const firstPass = getChatItems();
+    if (!firstPass.length) {
       log("没找到任何会话。请确认已进入「消息/沟通」页且左侧有联系人列表，然后刷新页面再试。", "err");
       running = false; return;
     }
-    log("批量发送开始：找到 " + items.length + " 个会话，本次最多发 " + cfg.batchMax + " 条（同一段话）", "warn");
-    log("目标：" + items.slice(0, cfg.batchMax).map((el) => norm(el.textContent).slice(0, 12)).join(" | "));
+
+    // 先按当前顺序记录“目标会话”的稳定标识，后面每次重新扫描列表时据此定位
+    const targetKeys = [];
+    firstPass.forEach((el) => {
+      const k = itemKey(el);
+      if (k && targetKeys.indexOf(k) === -1) targetKeys.push(k);
+    });
+    const picked = targetKeys.slice(0, cfg.batchMax);
+    log("批量发送开始：共 " + targetKeys.length + " 个会话，本次最多发 " + picked.length + " 条（同一段话）", "warn");
+    log("目标：" + picked.map((k) => k.slice(0, 14)).join(" | "));
 
     let count = 0;
-    for (let i = 0; i < items.length && count < cfg.batchMax; i++) {
+    for (let i = 0; i < picked.length && count < cfg.batchMax; i++) {
       if (stopFlag) break;
       if (!withinCap()) { log("达到每小时上限，批量停止", "warn"); break; }
+      const key = picked[i];
       try {
-        await openChatItem(items[i]);
-        if (!setInput(text)) continue;
+        // 关键：每次重新扫描，避免列表被顶到前面后旧节点失效
+        const fresh = getChatItems();
+        const item = fresh.filter((el) => itemKey(el) === key)[0];
+        if (!item) { log("跳过（列表里找不到该会话）：" + key.slice(0, 14), "warn"); continue; }
+
+        await openChatItem(item);
+        if (!setInput(text)) { log("跳过（写不进输入框）：" + key.slice(0, 14), "err"); continue; }
         await sleep(rnd(500, 1000));
         if (clickSend()) {
           await sleep(800);
@@ -547,7 +569,7 @@
           const still = box ? (box.innerText || box.value || "").trim() : "";
           if (still) log("⚠️ 发送后输入框仍有内容，可能没真正发出，请检查 sendBtn / 发送方式", "err");
           markSent(); count++;
-          log("批量已发送 " + count + "/" + cfg.batchMax + " → " + norm(items[i].textContent).slice(0, 18), "ok");
+          log("批量已发送 " + count + "/" + picked.length + " → " + key.slice(0, 18), "ok");
         }
       } catch (e) {
         log("跳过一条：" + e.message, "err");
@@ -558,6 +580,9 @@
     log("批量结束，共发送 " + count + " 条", "warn");
     running = false;
   }
+
+  // 会话项的稳定标识：取每项可见文字（含姓名/岗位）作为 key
+  function itemKey(el) { return norm(el.textContent).slice(0, 40); }
 
   /* ------------------------------ 扫描元素 ------------------------------- */
   function scan() {
