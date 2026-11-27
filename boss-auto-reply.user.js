@@ -28,13 +28,14 @@
   /* ----------------------------- 可调选择器 ------------------------------ */
   // 每个字段按顺序尝试，命中第一个可用元素。看不清就点「扫描元素」。
   const SELECTORS = {
-    // 左侧会话列表的每一项
+    // 会话列表的每一项
     chatListItem: [
-      ".user-list .item",
+      ".chat-user-item",
       ".chat-user-list .item",
-      ".conversation-list .item",
-      ".geek-list .item",
-      "ul.user-list > li"
+      ".chat-user-list > *",
+      ".user-list .item",
+      ".chat-user",
+      ".conversation-list .item"
     ],
     // 会话列表里的未读角标（用于定位“新招呼”）
     unreadBadge: [
@@ -46,8 +47,8 @@
     ],
     // 聊天区里的消息气泡（用于取最新一条）
     messageItem: [
-      ".chat-message",
       ".message-item",
+      ".chat-message",
       ".msg-item",
       ".chat-record .item",
       ".im-message"
@@ -55,13 +56,15 @@
     // 对方（候选人）发来的消息气泡
     incomingMessage: [
       ".message-item.received",
+      ".message-item.friend",
+      ".message-item.left",
+      ".message-item.other",
       ".msg-item.received",
-      ".chat-message.friend",
-      ".chat-message.receive",
-      ".message.receive"
+      ".chat-message.friend"
     ],
     // 输入框（textarea 或 contenteditable）
     inputBox: [
+      ".boss-chat-editor-input",
       ".chat-input",
       "#chat-input",
       ".chat-editor [contenteditable='true']",
@@ -71,11 +74,12 @@
     ],
     // 发送按钮
     sendBtn: [
+      ".boss-chat-editor-send",
+      ".chat-editor-send",
       ".btn-send",
       ".chat-op .btn-send",
       ".send-btn",
-      ".chat-op .btn:last-child",
-      "button.send"
+      ".send-message"
     ]
   };
 
@@ -209,6 +213,7 @@
       '  <div class="bzai-sep">调试</div>',
       '  <div class="bzai-btns">',
       '    <button id="bzai-scan" type="button">扫描元素</button>',
+      '    <button id="bzai-deep" type="button">深度扫描</button>',
       '    <button id="bzai-test" type="button">测试生成</button>',
       '    <button id="bzai-copy" type="button">复制日志</button>',
       '    <button id="bzai-clear" type="button">清空日志</button>',
@@ -281,6 +286,7 @@
     wrap.querySelector("#bzai-batch-start").addEventListener("click", startBatch);
     wrap.querySelector("#bzai-batch-stop").addEventListener("click", () => { stopFlag = true; log("已请求停止", "warn"); });
     wrap.querySelector("#bzai-scan").addEventListener("click", scan);
+    wrap.querySelector("#bzai-deep").addEventListener("click", deepScan);
     wrap.querySelector("#bzai-copy").addEventListener("click", copyLog);
     wrap.querySelector("#bzai-test").addEventListener("click", async () => {
       const txt = lastIncomingText() || "（当前会话没有识别到对方消息）";
@@ -551,6 +557,58 @@
       log("⚠️ 没找到会话列表：请确认已进入招聘者「消息/沟通」页，并点开了某个会话。", "warn");
     }
     log("===== 扫描结束。把以上日志整段复制发我即可 =====");
+  }
+
+  /* ------------------------------ 深度扫描 ------------------------------- */
+  function deepScan() {
+    log("===== 深度扫描开始 =====");
+    log("网址：" + location.href);
+
+    // 1) 消息条目：看每条是“自己发的”还是“对方发的”
+    const items = pickAll([".message-item", ".chat-message", ".msg-item"]);
+    log("消息条目数量：" + items.length + "（下列最后 6 条）");
+    items.slice(-6).forEach((el, i) => {
+      log("─ msg[" + i + "] class=" + el.className);
+      Array.from(el.querySelectorAll("*")).slice(0, 6).forEach((c) => {
+        const t = c.children.length ? "" : " text=" + norm(c.textContent).slice(0, 26);
+        log("    <" + c.tagName + "> class=" + (c.className || "") + t);
+      });
+    });
+
+    // 2) 会话列表候选
+    const userish = Array.from(document.querySelectorAll("[class*='chat-user'], [class*='user-list'], [class*='conversation'], [class*='chat-list']"))
+      .filter((n) => !inPanel(n));
+    log("会话列表候选容器：" + userish.length);
+    userish.slice(0, 6).forEach((el, i) => {
+      log("─ list[" + i + "] <" + el.tagName + "> class=" + el.className + " 子元素=" + el.children.length);
+      Array.from(el.children).slice(0, 3).forEach((c, j) => {
+        log("    child[" + j + "] <" + c.tagName + "> class=" + (c.className || "") + " text=" + norm(c.textContent).slice(0, 26));
+      });
+    });
+
+    // 3) 编辑器附近找发送按钮
+    const ed = pick(SELECTORS.inputBox);
+    if (ed) {
+      let box = ed.closest(".boss-chat-editor") || ed.closest("[class*='editor']") || ed.parentElement;
+      log("编辑器容器 class=" + (box ? box.className : "?"));
+      const cand = Array.from((box || ed).querySelectorAll("*")).filter((c) => {
+        const cls = String(c.className || "");
+        return /send|submit|btn|button|icon/i.test(cls) || /发送/.test(c.textContent || "");
+      });
+      log("编辑器附近疑似发送元素：" + cand.length);
+      cand.slice(0, 12).forEach((c, i) => {
+        log("  send[" + i + "] <" + c.tagName + "> class=" + (c.className || "") + " text=" + norm(c.textContent).slice(0, 10));
+      });
+    } else {
+      log("没找到输入框，先点开一个会话再扫描", "err");
+    }
+
+    // 4) 全页 send / submit
+    const sendAll = Array.from(document.querySelectorAll("[class*='send'], [class*='submit']")).filter((n) => !inPanel(n));
+    log("全页 class 含 send/submit：" + sendAll.length);
+    sendAll.slice(0, 10).forEach((c, i) => log("  <" + c.tagName + "> class=" + (c.className || "")));
+
+    log("===== 深度扫描结束。把这整段复制发我 =====");
   }
 
   function copyLog() {
