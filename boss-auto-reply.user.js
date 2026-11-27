@@ -30,12 +30,8 @@
   const SELECTORS = {
     // 会话列表的每一项
     chatListItem: [
-      ".chat-user-item",
-      ".chat-user-list .item",
-      ".chat-user-list > *",
-      ".user-list .item",
-      ".chat-user",
-      ".conversation-list .item"
+      ".user-container .user-list > div",
+      ".user-list > div"
     ],
     // 会话列表里的未读角标（用于定位“新招呼”）
     unreadBadge: [
@@ -45,7 +41,7 @@
       ".msg-count",
       ".message-count"
     ],
-    // 聊天区里的消息气泡（用于取最新一条）
+    // 聊天区里的消息行（用于取最新一条）
     messageItem: [
       ".message-item",
       ".chat-message",
@@ -53,14 +49,10 @@
       ".chat-record .item",
       ".im-message"
     ],
-    // 对方（候选人）发来的消息气泡
+    // 对方（候选人）发来的消息：真实结构是 .message-item 里的 .item-friend
     incomingMessage: [
-      ".message-item.received",
-      ".message-item.friend",
-      ".message-item.left",
-      ".message-item.other",
-      ".msg-item.received",
-      ".chat-message.friend"
+      ".message-item .item-friend",
+      ".message-item.item-friend"
     ],
     // 输入框（textarea 或 contenteditable）
     inputBox: [
@@ -72,14 +64,11 @@
       "textarea.input-area",
       "textarea"
     ],
-    // 发送按钮
+    // 发送按钮：真实结构是 .submit-content 里的 .submit
     sendBtn: [
-      ".boss-chat-editor-send",
-      ".chat-editor-send",
-      ".btn-send",
-      ".chat-op .btn-send",
-      ".send-btn",
-      ".send-message"
+      ".submit-content .submit",
+      ".submit",
+      ".boss-chat-editor-send"
     ]
   };
 
@@ -298,7 +287,12 @@
   }
 
   /* ----------------------------- 页面操作原语 ----------------------------- */
-  function getChatItems() { return pickAll(SELECTORS.chatListItem); }
+  function getChatItems() {
+    return pickAll(SELECTORS.chatListItem).filter((el) => {
+      const t = norm(el.textContent);
+      return t && !/加载更多|滚动加载/.test(t);
+    });
+  }
   function unreadBadgeOf(item) {
     for (let i = 0; i < SELECTORS.unreadBadge.length; i++) {
       try {
@@ -313,9 +307,11 @@
   }
   function lastIncomingText() {
     const nodes = pickAll(SELECTORS.incomingMessage);
-    if (nodes.length) return norm(nodes[nodes.length - 1].textContent);
-    const all = pickAll(SELECTORS.messageItem);
-    return all.length ? norm(all[all.length - 1].textContent) : "";
+    if (!nodes.length) return "";
+    const el = nodes[nodes.length - 1];
+    const tc = el.querySelector(".text-content");
+    if (tc && norm(tc.textContent)) return norm(tc.textContent);
+    return norm(el.textContent);
   }
 
   function setInput(text) {
@@ -360,7 +356,13 @@
 
   async function openChatItem(item) {
     item.click();
-    await sleep(rnd(900, 1600));
+    // 等待聊天区就绪（输入框出现），最多等 4 秒
+    const start = Date.now();
+    while (Date.now() - start < 4000) {
+      await sleep(200);
+      if (pick(SELECTORS.inputBox)) break;
+    }
+    await sleep(rnd(300, 700));
   }
 
   /* ------------------------------ 生成回复 ------------------------------- */
@@ -417,13 +419,15 @@
   }
 
   let busy = false;
+  let lastSeenText = "";
   async function tick() {
     if (!cfg.enabled || busy) return;
     if (!withinCap()) { log("已达每小时上限，暂停自动处理", "warn"); return; }
 
-    // 场景一：当前打开的会话里有新的对方消息
+    // 场景一：当前打开的会话里出现了“新的”对方消息（只对开启后变化的消息响应，避免翻历史时误发）
     const incoming = lastIncomingText();
-    if (incoming) {
+    if (incoming && incoming !== lastSeenText) {
+      lastSeenText = incoming;
       const key = hash(incoming);
       if (!handled.has(key)) {
         busy = true;
@@ -490,7 +494,12 @@
 
     running = true;
     const items = getChatItems();
-    log("批量发送开始，候选会话 " + items.length + " 个，上限 " + cfg.batchMax, "warn");
+    if (!items.length) {
+      log("没找到任何会话。请确认已进入「消息/沟通」页且左侧有联系人列表，然后刷新页面再试。", "err");
+      running = false; return;
+    }
+    log("批量发送开始：找到 " + items.length + " 个会话，本次最多发 " + cfg.batchMax + " 条（同一段话）", "warn");
+    log("目标：" + items.slice(0, cfg.batchMax).map((el) => norm(el.textContent).slice(0, 12)).join(" | "));
 
     let count = 0;
     for (let i = 0; i < items.length && count < cfg.batchMax; i++) {
@@ -501,6 +510,10 @@
         if (!setInput(text)) continue;
         await sleep(rnd(500, 1000));
         if (clickSend()) {
+          await sleep(800);
+          const box = pick(SELECTORS.inputBox);
+          const still = box ? (box.innerText || box.value || "").trim() : "";
+          if (still) log("⚠️ 发送后输入框仍有内容，可能没真正发出，请检查 sendBtn / 发送方式", "err");
           markSent(); count++;
           log("批量已发送 " + count + "/" + cfg.batchMax + " → " + norm(items[i].textContent).slice(0, 18), "ok");
         }
@@ -646,6 +659,11 @@
     if (document.getElementById("bzai-panel")) return;
     buildPanel();
     log("已加载。默认演练模式，未发送任何消息。", "ok");
+    // 记录当前最后一条对方消息，避免开启后把历史消息当成“新消息”去回复
+    setTimeout(() => {
+      lastSeenText = lastIncomingText();
+      if (lastSeenText) log("已记录当前会话最后一条对方消息，只对之后的新消息响应");
+    }, 2500);
     if (cfg.enabled) startLoop();
   }
 
