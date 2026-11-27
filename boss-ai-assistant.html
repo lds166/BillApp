@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Boss 对话筛选助手 · 只读版</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #f0f1f4;
+    --text: #17181c;
+    --text-muted: #5b5e66;
+    --border: #e3e5ea;
+    --brand: #4b3fe3;
+    --brand-soft: #eef0ff;
+    --brand-text: #1f1a66;
+    --high: #178a4c;
+    --high-soft: #e8f7ee;
+    --mid: #b06d00;
+    --mid-soft: #fdf3e2;
+    --low: #8a8f99;
+    --low-soft: #eef0f3;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --shadow: 0 1px 2px rgba(16, 18, 27, 0.06), 0 6px 20px rgba(16, 18, 27, 0.05);
+    --font: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101116;
+      --surface: #181a20;
+      --surface-2: #20232b;
+      --text: #e7e8ec;
+      --text-muted: #a2a6b0;
+      --border: #2c2f38;
+      --brand: #7f74ff;
+      --brand-soft: #23204a;
+      --brand-text: #d5d1ff;
+      --high: #47c988;
+      --high-soft: #16302a;
+      --mid: #f2b64b;
+      --mid-soft: #362a12;
+      --low: #8b909b;
+      --low-soft: #262932;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 6px 20px rgba(0,0,0,0.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  header.top { margin-bottom: 22px; }
+  .title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; line-height: 1.3; margin: 0; letter-spacing: -0.01em; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500;
+    padding: 4px 10px; border-radius: 999px;
+    background: var(--brand-soft); color: var(--brand-text);
+    border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); }
+  .sub { color: var(--text-muted); margin: 8px 0 0; font-size: 13px; }
+  .privacy { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+
+  .layout { display: grid; grid-template-columns: 420px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+  }
+  .panel .pad { padding: 18px 18px 20px; }
+  .panel h2 {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
+    text-transform: uppercase; color: var(--text-muted);
+    margin: 0; padding: 14px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .field { margin-bottom: 13px; }
+  .field:last-child { margin-bottom: 0; }
+  label.lbl { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 5px; font-weight: 500; }
+  input, textarea, select {
+    width: 100%; font-family: inherit; font-size: 13px; color: var(--text);
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 8px 10px; outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 16%, transparent);
+  }
+  textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
+  textarea.mono { font-family: var(--mono); font-size: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .hint { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+
+  .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  button {
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    border-radius: var(--radius); padding: 9px 14px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+    transition: background .15s ease, border-color .15s ease, opacity .15s ease;
+  }
+  button:hover { border-color: var(--brand); }
+  button.primary {
+    background: var(--brand); border-color: var(--brand); color: #fff;
+    flex: 1; min-width: 140px;
+  }
+  button.primary:hover { opacity: .92; }
+  button.ghost { background: transparent; }
+  button.small { padding: 5px 10px; font-size: 12px; }
+
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 16px; flex: 1; min-width: 120px;
+    box-shadow: var(--shadow);
+  }
+  .stat .n { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .stat .k { font-size: 12px; color: var(--text-muted); }
+  .stat.high .n { color: var(--high); }
+  .stat.mid .n { color: var(--mid); }
+  .stat.low .n { color: var(--low); }
+
+  .empty {
+    background: var(--surface); border: 1px dashed var(--border);
+    border-radius: var(--radius-lg); padding: 48px 24px; text-align: center;
+    color: var(--text-muted);
+  }
+  .empty b { color: var(--text); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 16px 18px; margin-bottom: 14px;
+    box-shadow: var(--shadow);
+  }
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .name { font-size: 16px; font-weight: 600; }
+  .meta { font-size: 12px; color: var(--text-muted); }
+  .score-wrap { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .score { font-size: 20px; font-weight: 700; font-family: var(--mono); letter-spacing: -0.02em; }
+  .grade {
+    font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .grade.high { background: var(--high-soft); color: var(--high); }
+  .grade.mid { background: var(--mid-soft); color: var(--mid); }
+  .grade.low { background: var(--low-soft); color: var(--low); }
+
+  .reasons { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+  .tag {
+    font-size: 12px; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text-muted);
+  }
+  .tag.pos { border-color: color-mix(in srgb, var(--high) 40%, transparent); color: var(--high); background: var(--high-soft); }
+  .tag.neg { border-color: color-mix(in srgb, var(--mid) 40%, transparent); color: var(--mid); background: var(--mid-soft); }
+
+  .draft-box {
+    margin-top: 6px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface-2); padding: 12px 14px;
+  }
+  .draft-box .dh {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .draft-box .dh span { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .draft-text { font-size: 13px; line-height: 1.7; white-space: pre-wrap; color: var(--text); }
+
+  .conv { margin-top: 10px; }
+  .conv summary { cursor: pointer; font-size: 12px; color: var(--text-muted); outline: none; }
+  .conv pre {
+    margin: 8px 0 0; padding: 10px 12px; background: var(--surface-2);
+    border-radius: var(--radius); font-family: var(--mono); font-size: 12px;
+    white-space: pre-wrap; word-break: break-word; color: var(--text-muted);
+    max-height: 220px; overflow: auto;
+  }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(12px);
+    background: var(--text); color: var(--bg); font-size: 13px; padding: 9px 16px;
+    border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease;
+    z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="title-row">
+      <h1>Boss 对话筛选助手</h1>
+      <span class="badge"><span class="dot"></span>只读分析 · 不自动发送</span>
+    </div>
+    <p class="sub">粘贴岗位 JD 和候选人对话，自动算出匹配分、分级，并生成可直接复制发送的回复草稿。</p>
+    <p class="privacy">全部在本机浏览器内完成，数据不会上传。生成的草稿需你手动复制粘贴到 Boss 发送。</p>
+  </header>
+
+  <div class="layout">
+    <!-- 输入区 -->
+    <section class="panel">
+      <h2>输入 <button class="small ghost" id="btnSample" type="button">载入示例</button></h2>
+      <div class="pad">
+        <div class="field">
+          <label class="lbl" for="jdText">岗位 JD</label>
+          <textarea id="jdText" placeholder="粘贴岗位职责与要求…"></textarea>
+        </div>
+
+        <div class="grid3">
+          <div class="field">
+            <label class="lbl" for="company">公司</label>
+            <input id="company" type="text" placeholder="星河科技" />
+          </div>
+          <div class="field">
+            <label class="lbl" for="role">岗位</label>
+            <input id="role" type="text" placeholder="高级前端工程师" />
+          </div>
+          <div class="field">
+            <label class="lbl" for="city">城市</label>
+            <input id="city" type="text" placeholder="上海" />
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="lbl" for="edu">最低学历</label>
+            <select id="edu">
+              <option value="0">不限</option>
+              <option value="1">大专</option>
+              <option value="2" selected>本科</option>
+              <option value="3">硕士</option>
+              <option value="4">博士</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="lbl" for="minYears">最低工作年限</label>
+            <input id="minYears" type="number" min="0" step="1" value="3" />
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="lbl" for="salMin">岗位薪资下限（K/月）</label>
+            <input id="salMin" type="number" min="0" step="1" value="25" />
+          </div>
+          <div class="field">
+            <label class="lbl" for="salMax">岗位薪资上限（K/月）</label>
+            <input id="salMax" type="number" min="0" step="1" value="35" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl" for="reqSkills">必备技能（逗号分隔）</label>
+          <input id="reqSkills" type="text" placeholder="React, TypeScript, Node.js" />
+        </div>
+        <div class="field">
+          <label class="lbl" for="plusSkills">加分技能（可选，逗号分隔）</label>
+          <input id="plusSkills" type="text" placeholder="组件库, 性能优化" />
+        </div>
+        <div class="field">
+          <label class="lbl" for="interviewNote">约面信息（会插入草稿）</label>
+          <input id="interviewNote" type="text" placeholder="本周三到周五下午，电话或到司都行" />
+        </div>
+
+        <div class="field">
+          <label class="lbl" for="candidatesText">候选人对话</label>
+          <textarea id="candidatesText" class="mono" style="min-height: 150px"
+            placeholder="每位候选人之间用一行 === 分隔。字段示例：&#10;姓名：张三&#10;城市：上海&#10;学历：本科&#10;工作年限：5&#10;期望薪资：28-32K&#10;对话：&#10;（粘贴聊天内容）"></textarea>
+          <div class="hint">支持字段：姓名 / 城市 / 学历 / 工作年限 / 期望薪资 / 对话</div>
+        </div>
+
+        <div class="actions">
+          <button class="primary" id="btnAnalyze" type="button">开始分析</button>
+          <button class="ghost" id="btnClear" type="button">清空</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 结果区 -->
+    <section>
+      <div id="summary" class="summary" style="display: none"></div>
+      <div id="results">
+        <div class="empty">
+          <p style="font-size: 15px; margin: 0 0 6px"><b>还没有分析结果</b></p>
+          <p style="margin: 0">点右上角「载入示例」看效果，或填入真实 JD 与对话后点「开始分析」。</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="toast" id="toast">已复制</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var EDU_RANK = { "不限": 0, "大专": 1, "本科": 2, "硕士": 3, "博士": 4 };
+
+  var SAMPLE = {
+    jd: "岗位：高级前端工程师\n公司：星河科技\n城市：上海\n薪资：25-35K/月\n\n职责：负责核心 SaaS 产品的前端架构与开发，推动组件库与工程化建设，优化页面性能与用户体验。\n要求：3 年以上前端经验，精通 React / TypeScript，熟悉 Node.js；有组件库建设或性能优化经验优先。",
+    company: "星河科技",
+    role: "高级前端工程师",
+    city: "上海",
+    edu: "2",
+    minYears: "3",
+    salMin: "25",
+    salMax: "35",
+    reqSkills: "React, TypeScript, Node.js",
+    plusSkills: "组件库, 性能优化",
+    interviewNote: "本周三到周五下午，电话或到司都可以",
+    candidates: [
+      "姓名：林晓\n城市：上海\n学历：本科\n工作年限：5\n期望薪资：28-32K\n对话：\nHR：你好，看到你投递了高级前端岗位，方便聊聊吗？\n林晓：方便。我做了 5 年前端，主要在 SaaS 团队负责 React + TypeScript，也搭过一套内部组件库，做过首屏性能优化，从 4s 降到 1.6s。\nHR：很好，薪资期望多少？\n林晓：28-32K 都可以，想找稳定一点的团队。",
+      "姓名：王磊\n城市：杭州\n学历：大专\n工作年限：2\n期望薪资：20-24K\n对话：\nHR：你好，看了你的简历，简单聊两句？\n王磊：好的，我主要做 Vue，React 写过一点。\nHR：TypeScript 和 Node.js 用得多么？\n王磊：TS 会一些基础，Node 没怎么写过。",
+      "姓名：陈静\n城市：上海\n学历：硕士\n工作年限：6\n期望薪资：35-40K\n对话：\n陈静：您好，请问这个岗位还在招吗？\nHR：在的，你的背景挺匹配，方便说下期望薪资和到岗时间吗？\n陈静：期望 35-40K，我 React、TypeScript、Node.js 都很熟，做过组件库和性能优化，最快两周内到岗。",
+      "姓名：赵敏\n城市：北京\n学历：本科\n工作年限：4\n期望薪资：面议\n对话：\n赵敏：你好，我不太想搬到上海，能远程吗？\nHR：这个岗位目前是上海坐班。\n赵敏：我主要用 Vue 和小程序，React 用得不多，但学习很快。"
+    ].join("\n===\n")
+  };
+
+  function fillSample() {
+    $("jdText").value = SAMPLE.jd;
+    $("company").value = SAMPLE.company;
+    $("role").value = SAMPLE.role;
+    $("city").value = SAMPLE.city;
+    $("edu").value = SAMPLE.edu;
+    $("minYears").value = SAMPLE.minYears;
+    $("salMin").value = SAMPLE.salMin;
+    $("salMax").value = SAMPLE.salMax;
+    $("reqSkills").value = SAMPLE.reqSkills;
+    $("plusSkills").value = SAMPLE.plusSkills;
+    $("interviewNote").value = SAMPLE.interviewNote;
+    $("candidatesText").value = SAMPLE.candidates;
+  }
+
+  function splitSkills(s) {
+    return String(s || "").split(/[,，、\n]/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+
+  function firstMatch(text, keys) {
+    for (var i = 0; i < keys.length; i++) {
+      var m = text.match(new RegExp(keys[i] + "\\s*[:：]\\s*([^\\n]*)"));
+      if (m && m[1] && m[1].trim()) return m[1].trim();
+    }
+    return "";
+  }
+
+  function parseSalary(str) {
+    if (!str) return null;
+    var nums = (str.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+    if (!nums.length) return null;
+    var min, max;
+    if (/万/.test(str)) {
+      min = nums[0] * 10; max = (nums[1] != null ? nums[1] : nums[0]) * 10;
+    } else if (/[kK]/.test(str)) {
+      min = nums[0]; max = (nums[1] != null ? nums[1] : nums[0]);
+    } else {
+      min = nums[0] / 1000; max = ((nums[1] != null ? nums[1] : nums[0])) / 1000;
+    }
+    return { min: Math.min(min, max), max: Math.max(min, max) };
+  }
+
+  function parseCandidates(raw) {
+    var blocks = String(raw || "").split(/^\s*={3,}\s*$/m);
+    var out = [];
+    blocks.forEach(function (block, idx) {
+      block = block.trim();
+      if (!block) return;
+
+      // 拆出对话正文
+      var parts = block.split(/\n\s*(?:简历\/对话|对话|简历|聊天记录)\s*[:：]\s*/);
+      var head = parts[0];
+      var body = parts.length > 1 ? parts.slice(1).join("\n") : "";
+
+      var name = firstMatch(head, ["姓名", "称呼"]);
+      if (!name) {
+        // 没有字段头，整块当正文
+        name = "候选人 " + (idx + 1);
+        head = "";
+        body = block;
+      }
+
+      out.push({
+        name: name,
+        city: firstMatch(head, ["城市", "所在地", "城市"]),
+        edu: firstMatch(head, ["学历", "最高学历"]),
+        yearsRaw: firstMatch(head, ["工作年限", "年限", "经验"]),
+        salaryRaw: firstMatch(head, ["期望薪资", "薪资", "期望"]),
+        body: body.trim(),
+        full: block
+      });
+    });
+    return out;
+  }
+
+  function eduRank(s) {
+    if (!s) return -1;
+    for (var k in EDU_RANK) { if (s.indexOf(k) === 0) return EDU_RANK[k]; }
+    if (s.indexOf("专科") === 0) return 1;
+    if (s.indexOf("研究生") === 0) return 3;
+    return -1;
+  }
+
+  function containsSkill(haystackLower, skill) {
+    var s = skill.toLowerCase().trim();
+    if (!s) return false;
+    return haystackLower.indexOf(s) !== -1;
+  }
+
+  function analyze(cfg, cand) {
+    var low = cand.full.toLowerCase();
+    var score = 40;
+    var pos = [];
+    var neg = [];
+
+    // 必备技能
+    var reqHit = [], reqMiss = [];
+    cfg.reqSkills.forEach(function (sk) {
+      if (containsSkill(low, sk)) reqHit.push(sk); else reqMiss.push(sk);
+    });
+    if (cfg.reqSkills.length) {
+      var ratio = reqHit.length / cfg.reqSkills.length;
+      score += Math.round(ratio * 30);
+      if (reqHit.length) pos.push("技能命中：" + reqHit.join("、"));
+      if (reqMiss.length) neg.push("缺少必备：" + reqMiss.join("、"));
+    }
+
+    // 加分技能
+    var plusHit = cfg.plusSkills.filter(function (sk) { return containsSkill(low, sk); });
+    if (plusHit.length) {
+      score += Math.min(plusHit.length * 3, 6);
+      pos.push("加分项：" + plusHit.join("、"));
+    }
+
+    // 工作年限
+    var years = parseInt(cand.yearsRaw, 10);
+    if (!isNaN(years)) {
+      if (years >= cfg.minYears) { score += 10; pos.push("年限达标（" + years + " 年）"); }
+      else if (years >= cfg.minYears - 1) { score += 5; neg.push("年限略低于要求（" + years + " 年）"); }
+      else { score -= 5; neg.push("年限不足（" + years + " 年）"); }
+    } else {
+      neg.push("未提供工作年限");
+    }
+
+    // 学历
+    var cr = eduRank(cand.edu);
+    if (cr >= 0) {
+      if (cr >= cfg.eduRank) { score += 5; pos.push("学历符合（" + cand.edu + "）"); }
+      else { score -= 10; neg.push("学历低于要求（" + cand.edu + "）"); }
+    }
+
+    // 城市
+    if (cand.city) {
+      if (cfg.city && (cand.city.indexOf(cfg.city) !== -1 || cfg.city.indexOf(cand.city) !== -1)) {
+        score += 5; pos.push("城市匹配（" + cand.city + "）");
+      } else {
+        score -= 5; neg.push("城市不符（" + cand.city + (cfg.city ? " / 需求 " + cfg.city : "") + "）");
+      }
+    }
+
+    // 薪资
+    var sal = parseSalary(cand.salaryRaw);
+    if (sal) {
+      if (sal.min <= cfg.salMax && sal.max >= cfg.salMin) { score += 5; pos.push("薪资在范围内"); }
+      else if (sal.min > cfg.salMax * 1.15) { score -= 8; neg.push("期望薪资偏高（" + cand.salaryRaw + "）"); }
+      else if (sal.max < cfg.salMin) { pos.push("薪资低于预算，有谈空间"); }
+    }
+
+    score = Math.max(0, Math.min(100, score));
+    var grade, gradeKey;
+    if (score >= 78) { grade = "高匹配"; gradeKey = "high"; }
+    else if (score >= 55) { grade = "待定"; gradeKey = "mid"; }
+    else { grade = "不合适"; gradeKey = "low"; }
+
+    return {
+      score: score, grade: grade, gradeKey: gradeKey,
+      pos: pos, neg: neg,
+      reqHit: reqHit, reqMiss: reqMiss,
+      draft: buildDraft(cfg, cand, gradeKey, reqHit, reqMiss, sal)
+    };
+  }
+
+  function buildDraft(cfg, cand, gradeKey, reqHit, reqMiss, sal) {
+    var who = cand.name;
+    var co = cfg.company ? "【" + cfg.company + "】" : "";
+    var role = cfg.role || "该岗位";
+    var note = cfg.interviewNote ? " " + cfg.interviewNote + "。" : "";
+    var topSkills = reqHit.slice(0, 3).join("、");
+
+    if (gradeKey === "high") {
+      return who + "你好，我是" + co + role + "的招聘负责人。看了你的经历，" +
+        (topSkills ? topSkills + "这块和我们岗位挺契合的，"
+          : "整体背景和我们岗位挺契合的，") +
+        "想约个时间电话聊 10 分钟，把岗位和团队情况同步给你。" + note +
+        "你看方便吗？";
+    }
+    if (gradeKey === "mid") {
+      var asks = [];
+      if (reqMiss.length) asks.push(reqMiss.join("、") + "的实际项目经验");
+      if (!cand.yearsRaw) asks.push("工作年限");
+      if (!sal) asks.push("期望薪资");
+      if (cand.city && cfg.city && cand.city.indexOf(cfg.city) === -1) asks.push("是否接受" + cfg.city + "坐班");
+      if (!asks.length) asks.push("目前看机会的意向和到岗时间");
+      return who + "你好，我是" + co + role + "招聘。初步看你的背景有匹配的部分，想先确认几点：" +
+        asks.join("；") + "。方便简单回复一下吗？";
+    }
+    return who + "你好，感谢你关注" + co + role + "岗位。这个岗位目前更需要" +
+      (cfg.reqSkills.length ? cfg.reqSkills.slice(0, 2).join("、") + " 方向" : "更贴合的经验") +
+      "，和你的方向暂时有些差异，先祝你求职顺利，后续有合适的再联系你。";
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function render(cfg, results) {
+    results.sort(function (a, b) { return b.score - a.score; });
+
+    var counts = { high: 0, mid: 0, low: 0 };
+    results.forEach(function (r) { counts[r.gradeKey]++; });
+
+    var summary = $("summary");
+    summary.style.display = "flex";
+    summary.innerHTML =
+      '<div class="stat high"><div class="n">' + counts.high + '</div><div class="k">高匹配 · 优先联系</div></div>' +
+      '<div class="stat mid"><div class="n">' + counts.mid + '</div><div class="k">待定 · 需追问</div></div>' +
+      '<div class="stat low"><div class="n">' + counts.low + '</div><div class="k">不合适 · 可归档</div></div>' +
+      '<div class="stat"><div class="n">' + results.length + '</div><div class="k">共分析候选人</div></div>';
+
+    var html = "";
+    results.forEach(function (r, i) {
+      var tags = "";
+      r.pos.forEach(function (t) { tags += '<span class="tag pos">' + esc(t) + "</span>"; });
+      r.neg.forEach(function (t) { tags += '<span class="tag neg">' + esc(t) + "</span>"; });
+
+      var metaParts = [];
+      if (r.cand.city) metaParts.push(esc(r.cand.city));
+      if (r.cand.edu) metaParts.push(esc(r.cand.edu));
+      if (r.cand.yearsRaw) metaParts.push(esc(r.cand.yearsRaw) + " 年");
+      if (r.cand.salaryRaw) metaParts.push("期望 " + esc(r.cand.salaryRaw));
+
+      html += '<div class="card" data-i="' + i + '">' +
+        '<div class="card-head">' +
+          '<div class="who"><span class="name">' + esc(r.cand.name) + "</span>" +
+            '<span class="meta">' + metaParts.join(" · ") + "</span></div>" +
+          '<div class="score-wrap">' +
+            '<span class="score">' + r.score + "</span>" +
+            '<span class="grade ' + r.gradeKey + '">' + esc(r.grade) + "</span>" +
+          "</div>" +
+        "</div>" +
+        '<div class="reasons">' + (tags || '<span class="tag">信息较少</span>') + "</div>" +
+        '<div class="draft-box">' +
+          '<div class="dh"><span>回复草稿（复制后到 Boss 手动发送）</span>' +
+            '<button class="small copy" data-idx="' + i + '" type="button">复制</button></div>' +
+          '<div class="draft-text">' + esc(r.draft) + "</div>" +
+        "</div>" +
+        (r.cand.body
+          ? '<details class="conv"><summary>查看原始对话</summary><pre>' + esc(r.cand.body) + "</pre></details>"
+          : "") +
+        "</div>";
+    });
+
+    $("results").innerHTML = html;
+
+    // 复制按钮
+    Array.prototype.forEach.call(document.querySelectorAll(".copy"), function (btn) {
+      btn.addEventListener("click", function () {
+        var idx = parseInt(btn.getAttribute("data-idx"), 10);
+        var text = results[idx].draft;
+        copyText(text, btn);
+      });
+    });
+  }
+
+  function copyText(text, btn) {
+    var done = function () {
+      toast("已复制草稿");
+      if (btn) { var old = btn.textContent; btn.textContent = "已复制"; setTimeout(function () { btn.textContent = old; }, 1200); }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+  function fallbackCopy(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta); done();
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 1500);
+  }
+
+  function readConfig() {
+    return {
+      jd: $("jdText").value.trim(),
+      company: $("company").value.trim(),
+      role: $("role").value.trim(),
+      city: $("city").value.trim(),
+      edu: $("edu").value,
+      eduRank: parseInt($("edu").value, 10),
+      minYears: parseFloat($("minYears").value) || 0,
+      salMin: parseFloat($("salMin").value) || 0,
+      salMax: parseFloat($("salMax").value) || 0,
+      reqSkills: splitSkills($("reqSkills").value),
+      plusSkills: splitSkills($("plusSkills").value),
+      interviewNote: $("interviewNote").value.trim()
+    };
+  }
+
+  function run() {
+    var cfg = readConfig();
+    var cands = parseCandidates($("candidatesText").value);
+    if (!cands.length) {
+      toast("请先填写候选人对话");
+      return;
+    }
+    var results = cands.map(function (c) {
+      var r = analyze(cfg, c);
+      r.cand = c;
+      return r;
+    });
+    render(cfg, results);
+    toast("已分析 " + results.length + " 位候选人");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  $("btnSample").addEventListener("click", function () { fillSample(); toast("已载入示例"); });
+  $("btnAnalyze").addEventListener("click", run);
+  $("btnClear").addEventListener("click", function () {
+    ["jdText","company","role","city","minYears","salMin","salMax","reqSkills","plusSkills","interviewNote","candidatesText"]
+      .forEach(function (id) { $(id).value = ""; });
+    $("edu").value = "2";
+    $("summary").style.display = "none";
+    $("results").innerHTML = '<div class="empty"><p style="font-size:15px;margin:0 0 6px"><b>已清空</b></p><p style="margin:0">填入内容后点「开始分析」。</p></div>';
+  });
+})();
+</script>
+</body>
+</html>
