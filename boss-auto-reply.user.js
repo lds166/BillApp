@@ -538,28 +538,27 @@
       log("没找到任何会话。请确认已进入「消息/沟通」页且左侧有联系人列表，然后刷新页面再试。", "err");
       running = false; return;
     }
+    log("批量发送开始：当前列表 " + firstPass.length + " 个会话，本次最多发 " + cfg.batchMax + " 条（同一段话）", "warn");
 
-    // 先按当前顺序记录“目标会话”的稳定标识，后面每次重新扫描列表时据此定位
-    const targetKeys = [];
-    firstPass.forEach((el) => {
-      const k = itemKey(el);
-      if (k && targetKeys.indexOf(k) === -1) targetKeys.push(k);
-    });
-    const picked = targetKeys.slice(0, cfg.batchMax);
-    log("批量发送开始：共 " + targetKeys.length + " 个会话，本次最多发 " + picked.length + " 条（同一段话）", "warn");
-    log("目标：" + picked.map((k) => k.slice(0, 14)).join(" | "));
-
+    const done = new Set();
     let count = 0;
-    for (let i = 0; i < picked.length && count < cfg.batchMax; i++) {
+    let guard = 0;
+    while (count < cfg.batchMax && guard++ < cfg.batchMax * 6) {
       if (stopFlag) break;
       if (!withinCap()) { log("达到每小时上限，批量停止", "warn"); break; }
-      const key = picked[i];
-      try {
-        // 关键：每次重新扫描，避免列表被顶到前面后旧节点失效
-        const fresh = getChatItems();
-        const item = fresh.filter((el) => itemKey(el) === key)[0];
-        if (!item) { log("跳过（列表里找不到该会话）：" + key.slice(0, 14), "warn"); continue; }
 
+      // 每次重新扫描列表，挑第一个“还没发过”的会话（按姓名去重，避免被顶到前面后重复发）
+      const list = getChatItems();
+      let item = null, key = "";
+      for (const el of list) {
+        const k = itemKey(el);
+        if (k && !done.has(k)) { item = el; key = k; break; }
+      }
+      if (!item) { log("列表里已没有可发送的会话了", "warn"); break; }
+
+      done.add(key);
+      try {
+        log("打开会话：" + key.slice(0, 14));
         await openChatItem(item);
         if (!setInput(text)) { log("跳过（写不进输入框）：" + key.slice(0, 14), "err"); continue; }
         await sleep(rnd(500, 1000));
@@ -569,7 +568,7 @@
           const still = box ? (box.innerText || box.value || "").trim() : "";
           if (still) log("⚠️ 发送后输入框仍有内容，可能没真正发出，请检查 sendBtn / 发送方式", "err");
           markSent(); count++;
-          log("批量已发送 " + count + "/" + picked.length + " → " + key.slice(0, 18), "ok");
+          log("批量已发送 " + count + "/" + cfg.batchMax + " → " + key.slice(0, 18), "ok");
         }
       } catch (e) {
         log("跳过一条：" + e.message, "err");
@@ -581,8 +580,13 @@
     running = false;
   }
 
-  // 会话项的稳定标识：取每项可见文字（含姓名/岗位）作为 key
-  function itemKey(el) { return norm(el.textContent).slice(0, 40); }
+  // 会话项的稳定标识：去掉开头时间（刚刚/昨天/12:30/11-25 18:16），取“姓名+岗位”做 key。
+  // 发送后预览文字会变，但姓名不变，这样去重才不会重复发给同一个人。
+  function itemKey(el) {
+    let t = norm(el.textContent);
+    t = t.replace(/^(?:(?:刚刚|昨天|前天|\d{2}-\d{2}|\d{1,2}:\d{2})\s*)+/, "");
+    return t.slice(0, 16) || norm(el.textContent).slice(0, 16);
+  }
 
   /* ------------------------------ 扫描元素 ------------------------------- */
   function scan() {
