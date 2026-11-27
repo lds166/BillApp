@@ -127,12 +127,17 @@
     try { localStorage.setItem(HANDLED_KEY, JSON.stringify(Array.from(handled).slice(-500))); } catch (e) {}
   }
 
+  // 排除脚本自己的悬浮面板，避免误把面板里的元素当成页面元素
+  function inPanel(el) { return !!(el && el.closest && el.closest("#bzai-panel")); }
+
   function pick(list, root) {
     const scope = root || document;
     for (let i = 0; i < list.length; i++) {
       try {
-        const el = scope.querySelector(list[i]);
-        if (el) return el;
+        const nodes = scope.querySelectorAll(list[i]);
+        for (let j = 0; j < nodes.length; j++) {
+          if (!inPanel(nodes[j])) return nodes[j];
+        }
       } catch (e) {}
     }
     return null;
@@ -143,7 +148,7 @@
     for (let i = 0; i < list.length; i++) {
       try {
         const nodes = scope.querySelectorAll(list[i]);
-        nodes.forEach((n) => { if (out.indexOf(n) === -1) out.push(n); });
+        nodes.forEach((n) => { if (out.indexOf(n) === -1 && !inPanel(n)) out.push(n); });
       } catch (e) {}
     }
     return out;
@@ -205,6 +210,7 @@
       '  <div class="bzai-btns">',
       '    <button id="bzai-scan" type="button">扫描元素</button>',
       '    <button id="bzai-test" type="button">测试生成</button>',
+      '    <button id="bzai-copy" type="button">复制日志</button>',
       '    <button id="bzai-clear" type="button">清空日志</button>',
       "  </div>",
       '  <div id="bzai-log" class="bzai-log"></div>',
@@ -275,6 +281,7 @@
     wrap.querySelector("#bzai-batch-start").addEventListener("click", startBatch);
     wrap.querySelector("#bzai-batch-stop").addEventListener("click", () => { stopFlag = true; log("已请求停止", "warn"); });
     wrap.querySelector("#bzai-scan").addEventListener("click", scan);
+    wrap.querySelector("#bzai-copy").addEventListener("click", copyLog);
     wrap.querySelector("#bzai-test").addEventListener("click", async () => {
       const txt = lastIncomingText() || "（当前会话没有识别到对方消息）";
       log("识别到的对方最新消息：" + txt);
@@ -504,24 +511,76 @@
   /* ------------------------------ 扫描元素 ------------------------------- */
   function scan() {
     log("===== 扫描开始 =====");
-    const ce = document.querySelectorAll("[contenteditable='true']");
-    log("contenteditable 数量：" + ce.length);
-    ce.forEach((e, i) => log("  ce[" + i + "] class=" + e.className));
-    const ta = document.querySelectorAll("textarea");
-    log("textarea 数量：" + ta.length);
+    log("当前网址：" + location.href);
+    log("页面标题：" + document.title);
+
+    const iframes = Array.from(document.querySelectorAll("iframe"));
+    log("iframe 数量：" + iframes.length);
+    iframes.slice(0, 5).forEach((f, i) => log("  iframe[" + i + "] src=" + (f.getAttribute("src") || "")));
+
+    const ce = Array.from(document.querySelectorAll("[contenteditable='true']")).filter((n) => !inPanel(n));
+    log("真实 contenteditable 数量：" + ce.length);
+    ce.forEach((e, i) => log("  ce[" + i + "] <" + e.tagName + "> class=" + e.className));
+
+    const ta = Array.from(document.querySelectorAll("textarea")).filter((n) => !inPanel(n));
+    log("真实 textarea 数量：" + ta.length);
     ta.forEach((e, i) => log("  ta[" + i + "] class=" + e.className + " id=" + e.id));
-    const btns = Array.from(document.querySelectorAll("button, a.btn, .btn"));
-    const sendLike = btns.filter((b) => /发送|send/i.test(b.textContent || "") || /send/i.test(b.className || ""));
+
+    // 关键词元素：聊天/消息/输入/发送相关
+    const KW = /(chat|message|msg|send|input|editor|user-list|userlist|conversation|im-|session)/i;
+    const kwEls = Array.from(document.querySelectorAll("[class]")).filter((n) => {
+      return !inPanel(n) && KW.test(String(n.className || ""));
+    });
+    log("含聊天关键词的元素：" + kwEls.length + " 个（下列前 30）");
+    kwEls.slice(0, 30).forEach((e, i) => {
+      log("  [" + e.tagName + "] class=" + e.className + (e.id ? " id=" + e.id : ""));
+    });
+
+    const btns = Array.from(document.querySelectorAll("button, a, div[role='button']")).filter((n) => !inPanel(n));
+    const sendLike = btns.filter((b) => /发送|send/i.test(b.textContent || "") || /send/i.test(String(b.className || "")));
     log("疑似发送按钮：" + sendLike.length);
-    sendLike.slice(0, 10).forEach((b, i) => log("  send[" + i + "] class=" + b.className + " text=" + norm(b.textContent).slice(0, 10)));
-    const lists = document.querySelectorAll("ul, .list, [class*='list']");
-    log("疑似列表容器：" + lists.length + "（太多则用控制台细化）");
-    log("各 SELECTORS 当前命中：");
+    sendLike.slice(0, 10).forEach((b, i) => log("  send[" + i + "] <" + b.tagName + "> class=" + b.className + " text=" + norm(b.textContent).slice(0, 12)));
+
+    log("各 SELECTORS 当前命中（已排除脚本面板）：");
     Object.keys(SELECTORS).forEach((k) => {
       const ok = pick(SELECTORS[k]);
-      log("  " + k + " → " + (ok ? "命中 " + ok.className : "未命中"), ok ? "ok" : "err");
+      log("  " + k + " → " + (ok ? "命中 <" + ok.tagName + "> " + ok.className : "未命中"), ok ? "ok" : "err");
     });
-    log("===== 扫描结束，按 class 修正脚本顶部 SELECTORS =====");
+
+    if (!pick(SELECTORS.chatListItem)) {
+      log("⚠️ 没找到会话列表：请确认已进入招聘者「消息/沟通」页，并点开了某个会话。", "warn");
+    }
+    log("===== 扫描结束。把以上日志整段复制发我即可 =====");
+  }
+
+  function copyLog() {
+    if (!logEl) return;
+    const text = logEl.innerText || logEl.textContent;
+    const done = () => toast("日志已复制");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => selectLog());
+    } else {
+      selectLog();
+    }
+  }
+  function selectLog() {
+    if (!logEl) return;
+    const r = document.createRange(); r.selectNodeContents(logEl);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    toast("已选中，按 Ctrl+C 复制");
+  }
+  let toastTimer = null;
+  function toast(msg) {
+    let t = document.getElementById("bzai-toast");
+    if (!t) {
+      t = document.createElement("div");
+      t.id = "bzai-toast";
+      t.style.cssText = "position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#111;color:#fff;" +
+        "padding:8px 16px;border-radius:999px;font-size:12px;z-index:2147483647;opacity:0;transition:opacity .2s;";
+      document.body.appendChild(t);
+    }
+    t.textContent = msg; t.style.opacity = "1";
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.opacity = "0"; }, 1500);
   }
 
   /* ------------------------------- 启动 ---------------------------------- */
